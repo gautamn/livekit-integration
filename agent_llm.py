@@ -620,7 +620,8 @@ class LLM(llm.LLM):
                             print(f"[AgentAPIStream.__anext__] Received agent chunk: {agent_chunk}")
                             
                             # Extract text from the agent's response
-                            text = agent_chunk.get("text", "")
+                            #text = agent_chunk.get("answer", "")
+                            text = agent_chunk
                             print(f"[AgentAPIStream.__anext__] Extracted text: '{text}'")
                             
                             # If we got text, add it to our buffer and immediately send it to TTS

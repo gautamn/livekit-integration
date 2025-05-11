@@ -72,14 +72,18 @@ class AgentAPIClient:
                         print(f"\n[Agent API] Received line: {line}")
                         try:
                             # Parse the JSON chunk
-                            chunk = json.loads(line)
+                            json_part = line.split("data: ", 1)[1]
+                            chunk = json.loads(json_part)
                             print(f"[Agent API] Yielding chunk: {chunk}")
+
+                            # if chunk.get("event") == "message_end" or chunk.get("event") == "agent_thought":
+                            #     pass
                             
                             # Check if this chunk has text content
-                            if "answer" in chunk and chunk["answer"]:
+                            if chunk.get("event") == "agent_message" and "answer" in chunk and chunk["answer"]:
                                 has_yielded_text = True
-                            
-                            yield chunk
+                                yield chunk["answer"]
+
                         except json.JSONDecodeError:
                             print(f"[Agent API] JSON decode error for line: {line}")
                             # Skip lines that aren't valid JSON
