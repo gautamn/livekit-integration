@@ -6,22 +6,20 @@ import time
 import uuid
 from typing import Optional, Dict, Any, AsyncIterator
 
-class AgentAPIClient:
+class AgentAPIClientCitibank:
     """Client for interacting with the third-party agent API."""
-
-    bearer_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJhYWVlMjBkOC0wNDA1LTRlNTYtOTQ3YS05MTIyZmFhZjMyMWIiLCJzdWIiOiJXZWIgQVBJIFBhc3Nwb3J0IiwiYXBwX2lkIjoiYWFlZTIwZDgtMDQwNS00ZTU2LTk0N2EtOTEyMmZhYWYzMjFiIiwiYXBwX2NvZGUiOiJIN0pLdHRYVXZyWDViQnhEIiwiZW5kX3VzZXJfaWQiOiIzNmJhNjM0MS0zMmI1LTQxMjctODExMC05OWFlNmJjYjJjNWYifQ.lIQVZ0LPwAREIfXYARWWB6vVLeHy9SXJf0qzzNbi3Eo"
     
-    def __init__(self, base_url: str = "https://app.eng.quant.ai/api/chat-messages"):
+    def __init__(self, base_url: str = "https://qbank.eng.quant.ai/api/livekit_voice/call/H7JKttXUvrX5bBxD"):
         self.base_url = base_url
         self.headers = {
             'Content-Type': 'application/json',
-            'Authorization': f'Bearer {self.bearer_token}'
+            'Authorization': 'Basic YWRtaW5AcXVhbnQuYWk6QWRtaW5AMTIz'
         }
     
     async def call_agent(self, 
                          query: str, 
                          call_id: Optional[str] = None, 
-                         from_number: Optional[str] = None, 
+                         from_number: str = "+1234567890", 
                          conversation_id: Optional[str] = None) -> AsyncIterator[Dict[str, Any]]:
         """
         Call the agent API and return a streaming response.
@@ -35,19 +33,20 @@ class AgentAPIClient:
         Returns:
             An async iterator yielding response chunks from the agent
         """
+        if not call_id:
+            call_id = f"call_{uuid.uuid4()}"
             
         if not conversation_id:
-            conversation_id = "50998c68-7169-4c6a-842a-5b1695bf8307" 
+            conversation_id = "4c738740-070b-496e-8acd-31ab5627305b" 
 
 
-        print(f"****** [Agent] Calling agent with query: {query}, conversation_id: {conversation_id}")    
+        print(f"****** [Agent] Calling agent with query: {query}, call_id: {call_id}, conversation_id: {conversation_id}")    
         
         payload = json.dumps({
+            "call_id": call_id,
             "query": query,
-            "conversation_id": "50998c68-7169-4c6a-842a-5b1695bf8307",
-            "response_mode": "streaming",
-            "channel": "web",
-            "inputs": {}
+            "from": from_number,
+            "conversation_id": "a80660b5-a6fc-44fb-9dc9-a4b8c3febbd0"
         })
         
         print(f"[Agent API] Making POST request to {self.base_url}")
@@ -72,11 +71,12 @@ class AgentAPIClient:
                         print(f"\n[Agent API] Received line: {line}")
                         try:
                             # Parse the JSON chunk
-                            chunk = json.loads(line)
+                            json_part = line.split("data: ", 1)[1]
+                            chunk = json.loads(json_part)
                             print(f"[Agent API] Yielding chunk: {chunk}")
                             
                             # Check if this chunk has text content
-                            if "answer" in chunk and chunk["answer"]:
+                            if "text" in chunk and chunk["text"]:
                                 has_yielded_text = True
                             
                             yield chunk
@@ -98,6 +98,7 @@ class AgentAPIClient:
     async def call_agent_sync(self, 
                              query: str, 
                              call_id: Optional[str] = None, 
+                             from_number: str = "+1234567890", 
                              conversation_id: Optional[str] = None) -> str:
         """
         Call the agent API and return the complete response as a string.
