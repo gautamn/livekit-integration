@@ -68,12 +68,12 @@ class AgentAPIClient:
                 async for line in response.content:
                     line = line.decode('utf-8').strip()
                     if line:
-                        print(f"\n[Agent API] Received line: {line}")
+                        #print(f"\n[Agent API] Received line: {line}")
                         try:
                             # Parse the JSON chunk
                             json_part = line.split("data: ", 1)[1]
                             chunk = json.loads(json_part)
-                            print(f"[Agent API] Yielding chunk: {chunk}")
+                            #print(f"[Agent API] Yielding chunk: {chunk}")
                             
                             # Check if this chunk has text content
                             if "text" in chunk and chunk["text"]:

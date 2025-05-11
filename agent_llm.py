@@ -598,35 +598,35 @@ class LLM(llm.LLM):
                         return self
                     
                     async def __anext__(self):
-                        print("[AgentAPIStream.__anext__] Method called")
+                        #print("[AgentAPIStream.__anext__] Method called")
                         # Initialize the agent stream if not already done
                         if self.agent_stream is None:
-                            print("[AgentAPIStream.__anext__] Initializing agent_stream")
+                            #print("[AgentAPIStream.__anext__] Initializing agent_stream")
                             self.agent_stream = self.agent_client.call_agent(
                                 query=self.query,
                                 conversation_id=self.conversation_id
                             )
-                            print("[AgentAPIStream.__anext__] agent_stream initialized")
+                            #print("[AgentAPIStream.__anext__] agent_stream initialized")
                         
                         # If we've finished, stop iteration
                         if self.finished:
-                            print("[AgentAPIStream.__anext__] Stream finished, raising StopAsyncIteration")
+                            #print("[AgentAPIStream.__anext__] Stream finished, raising StopAsyncIteration")
                             raise StopAsyncIteration
                         
                         try:
-                            print("[AgentAPIStream.__anext__] Awaiting next chunk from agent_stream")
+                            #print("[AgentAPIStream.__anext__] Awaiting next chunk from agent_stream")
                             # Get the next chunk from the agent
                             agent_chunk = await anext(self.agent_stream)
-                            print(f"[AgentAPIStream.__anext__] Received agent chunk: {agent_chunk}")
+                            #print(f"[AgentAPIStream.__anext__] Received agent chunk: {agent_chunk}")
                             
                             # Extract text from the agent's response
                             text = agent_chunk.get("text", "")
-                            print(f"[AgentAPIStream.__anext__] Extracted text: '{text}'")
+                            #print(f"[AgentAPIStream.__anext__] Extracted text: '{text}'")
                             
                             # If we got text, add it to our buffer and immediately send it to TTS
                             # This ensures the TTS layer receives content as soon as possible
                             if text:
-                                print(f"[AgentAPIStream.__anext__] Sending text directly to TTS: '{text}'")
+                                #print(f"[AgentAPIStream.__anext__] Sending text directly to TTS: '{text}'")
                                 # Mark that we've received text from the agent API
                                 self.received_text = True
                                 # Create a chunk with the text and return it immediately
@@ -663,7 +663,7 @@ class LLM(llm.LLM):
                                         created=int(time.time()),
                                         usage=None
                                     )
-                                    print(f"[Agent] Created final chunk: id='{final_chunk.id}' with finish_reason='stop'")
+                                    #print(f"[Agent] Created final chunk: id='{final_chunk.id}' with finish_reason='stop'")
                                     return final_chunk
                             
                             # Check if we have complete words (space or punctuation)
@@ -726,7 +726,7 @@ class LLM(llm.LLM):
                                     created=int(time.time()),
                                     usage=None
                                 )
-                                print(f"[Agent] Created final chunk: id='{final_chunk.id}' with finish_reason='stop'")
+                                #print(f"[Agent] Created final chunk: id='{final_chunk.id}' with finish_reason='stop'")
                                 return final_chunk
                     
                     def _create_chunk(self, text):
@@ -750,7 +750,7 @@ class LLM(llm.LLM):
                         )
                         
                         # Log the chunk in the expected format
-                        print(f"[Agent] Created chunk: id='{chunk.id}' delta=ChoiceDelta(role='assistant', content='{text}', tool_calls=[])")
+                        #print(f"[Agent] Created chunk: id='{chunk.id}' delta=ChoiceDelta(role='assistant', content='{text}', tool_calls=[])")
                         
                         return chunk
                     
@@ -919,7 +919,7 @@ class LLMStream(llm.LLMStream):
                 async for chunk in stream:
                     for choice in chunk.choices:
                         chat_chunk = self._parse_choice(chunk.id, choice)
-                        print(f"\n[Agent] Received chunk: {chat_chunk}")
+                        #print(f"\n[Agent] Received chunk: {chat_chunk}")
                         if chat_chunk is not None:
                             retryable = False
                             self._event_ch.send_nowait(chat_chunk)
@@ -954,7 +954,7 @@ class LLMStream(llm.LLMStream):
 
     def _parse_choice(self, id: str, choice: Choice) -> llm.ChatChunk | None:
         delta = choice.delta
-        print(f"\n[Agent] _parse_choice called with id: {id}, delta: {delta}")
+        #print(f"\n[Agent] _parse_choice called with id: {id}, delta: {delta}")
 
         if delta is None:
             print("[Agent] Delta is None, returning None")
