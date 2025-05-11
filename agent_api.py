@@ -58,8 +58,8 @@ class AgentAPIClient:
                 # The response is a text/event-stream with chunks in JSON format
                 async for line in response.content:
                     line = line.decode('utf-8').strip()
-                    print(f"[Agent] Received line: {line}")
                     if line:
+                        print(f"\n[Agent] Received line: {line}")
                         try:
                             # Parse the JSON chunk
                             chunk = json.loads(line)

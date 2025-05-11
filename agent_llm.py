@@ -610,6 +610,7 @@ class LLM(llm.LLM):
                             try:
                                 # Get the next chunk from the agent
                                 agent_chunk = await anext(self.agent_stream)
+                                print(f"[Agent Stream] Received agent chunk: {agent_chunk}")
                                 
                                 # Extract text from the agent's response
                                 text = agent_chunk.get("text", "")
@@ -850,16 +851,29 @@ class LLMStream(llm.LLMStream):
             # )
 
             # Use the agent API integration exclusively since that's what we need
-            print("Using Agent API integration")
             
-            # Get the agent stream from the LLM instance
-            agent_stream = await self._llm.simulate_agent_stream(
-                messages=chat_ctx
-            )
-            
-            # Set both stream variables to ensure compatibility with all parts of the code
-            self._oai_stream = stream = agent_stream
-            self._agent_stream = stream
+            use_agent_api = os.getenv("USE_AGENT_API", "false").lower() == "true"
+            stream = None
+
+            if use_agent_api:
+                print("Using Agent API integration")
+                # Get the agent stream from the LLM instance
+                stream = await self._llm.simulate_agent_stream(
+                    messages=chat_ctx
+                )
+                self._agent_stream = stream
+            else:
+                stream = await self._client.chat.completions.create(
+                    messages=chat_ctx,
+                    tools=fnc_ctx,
+                    model=self._model,
+                    stream_options={"include_usage": True},
+                    stream=True,
+                    **self._extra_kwargs,
+                )
+
+            self._oai_stream = stream
+           
 
             async with stream:
                 async for chunk in stream:
