@@ -576,17 +576,7 @@ class LLMStream(llm.LLMStream):
             print("#####################################_run()#####################################################")
             chat_ctx = to_chat_ctx(self._chat_ctx, id(self._llm))
             fnc_ctx = to_fnc_ctx(self._tools) if self._tools else openai.NOT_GIVEN
-            # if lk_oai_debug:
-            #     tool_choice = self._extra_kwargs.get("tool_choice", NOT_GIVEN)
-                # logger.debug(
-                #     "chat.completions.create",
-                #     extra={
-                #         "fnc_ctx": fnc_ctx,
-                #         "tool_choice": tool_choice,
-                #         "chat_ctx": chat_ctx,
-                #     },
-                # )
-
+            
             # self._oai_stream = stream = await self._client.chat.completions.create(
             #     messages=chat_ctx,
             #     tools=fnc_ctx,
@@ -647,8 +637,6 @@ class LLMStream(llm.LLMStream):
     def _parse_choice(self, id: str, choice: Choice) -> llm.ChatChunk | None:
         delta = choice.delta
 
-        # https://github.com/livekit/agents/issues/688
-        # the delta can be None when using Azure OpenAI (content filtering)
         if delta is None:
             return None
 
