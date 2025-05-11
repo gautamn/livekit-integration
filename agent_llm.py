@@ -534,6 +534,8 @@ class LLM(llm.LLM):
         Returns:
             An asynchronous stream compatible with OpenAI's streaming format.
         """
+        # Set this flag to true to enable a fallback response if the agent API doesn't return any text
+        USE_FALLBACK_RESPONSE = False
         # Import OpenAI types to create proper objects
         import openai
         import os
@@ -588,116 +590,144 @@ class LLM(llm.LLM):
                         self.stream_id = f"agent-{uuid.uuid4()}"
                         self.buffer = ""  # Buffer for accumulating characters
                         self.word_buffer = ""  # Buffer for accumulating words
+                        self.received_text = False  # Flag to track if we've received any text
+                        self.fallback_response = "I'm sorry, I couldn't process your request at this time. Please try again later."  # Fallback response
                         print(f"[Agent Stream] Initializing with query: {query}, conversation_id: {self.conversation_id}")
                     
                     def __aiter__(self):
                         return self
                     
                     async def __anext__(self):
+                        print("[AgentAPIStream.__anext__] Method called")
                         # Initialize the agent stream if not already done
                         if self.agent_stream is None:
+                            print("[AgentAPIStream.__anext__] Initializing agent_stream")
                             self.agent_stream = self.agent_client.call_agent(
                                 query=self.query,
                                 conversation_id=self.conversation_id
                             )
+                            print("[AgentAPIStream.__anext__] agent_stream initialized")
                         
                         # If we've finished, stop iteration
                         if self.finished:
+                            print("[AgentAPIStream.__anext__] Stream finished, raising StopAsyncIteration")
                             raise StopAsyncIteration
                         
-                        # Keep accumulating characters until we have a word or end of stream
-                        while True:
-                            try:
-                                # Get the next chunk from the agent
-                                agent_chunk = await anext(self.agent_stream)
-                                print(f"[Agent Stream] Received agent chunk: {agent_chunk}")
-                                
-                                # Extract text from the agent's response
-                                text = agent_chunk.get("text", "")
-                                
-                                # If we got an empty chunk and we're at the end of the stream
-                                if not text:
-                                    # If we have any remaining text in the buffer, send it
-                                    if self.word_buffer:
-                                        text_to_send = self.word_buffer
-                                        self.word_buffer = ""
-                                        self.finished = True
-                                        return self._create_chunk(text_to_send)
-                                    elif self.buffer:
-                                        text_to_send = self.buffer
-                                        self.buffer = ""
-                                        self.finished = True
-                                        return self._create_chunk(text_to_send)
-                                    else:
-                                        # No more text, send the final stop chunk
-                                        self.finished = True
-                                        return ChatCompletionChunk(
-                                            id=self.stream_id,
-                                            choices=[Choice(
-                                                index=0,
-                                                delta=ChoiceDelta(),
-                                                finish_reason="stop"
-                                            )],
-                                            model="agent-api",
-                                            object="chat.completion.chunk",
-                                            created=int(time.time()),
-                                            usage=None
-                                        )
-                                
-                                # Add the text to our buffer
-                                self.buffer += text
-                                
-                                # Check if we have complete words (space or punctuation)
-                                words = []
-                                i = 0
-                                while i < len(self.buffer):
-                                    if self.buffer[i] in " ,.!?;:\n":
-                                        # We found a word boundary
-                                        if self.word_buffer:
-                                            # Add the accumulated word
-                                            words.append(self.word_buffer)
-                                            self.word_buffer = ""
-                                        # Add the space or punctuation as its own word
-                                        words.append(self.buffer[i])
-                                    else:
-                                        # Add character to the current word
-                                        self.word_buffer += self.buffer[i]
-                                    i += 1
-                                
-                                # Update the buffer to contain only the partial word
-                                self.buffer = self.word_buffer
-                                self.word_buffer = ""
-                                
-                                # If we have words to send, join them and return
-                                if words:
-                                    text_to_send = "".join(words)
-                                    return self._create_chunk(text_to_send)
-                                    
-                            except StopAsyncIteration:
-                                # If the agent stream is done, send any remaining text
-                                self.finished = True
+                        try:
+                            print("[AgentAPIStream.__anext__] Awaiting next chunk from agent_stream")
+                            # Get the next chunk from the agent
+                            agent_chunk = await anext(self.agent_stream)
+                            print(f"[AgentAPIStream.__anext__] Received agent chunk: {agent_chunk}")
+                            
+                            # Extract text from the agent's response
+                            text = agent_chunk.get("text", "")
+                            print(f"[AgentAPIStream.__anext__] Extracted text: '{text}'")
+                            
+                            # If we got text, add it to our buffer and immediately send it to TTS
+                            # This ensures the TTS layer receives content as soon as possible
+                            if text:
+                                print(f"[AgentAPIStream.__anext__] Sending text directly to TTS: '{text}'")
+                                # Mark that we've received text from the agent API
+                                self.received_text = True
+                                # Create a chunk with the text and return it immediately
+                                return self._create_chunk(text)
+                            
+                            # If no text, add empty string to buffer
+                            self.buffer += text
+                            
+                            # If we got an empty chunk and we're at the end of the stream
+                            if not text:
+                                print("[AgentAPIStream.__anext__] Empty text received")
+                                # If we have any remaining text in the buffer, send it
                                 if self.word_buffer:
                                     text_to_send = self.word_buffer
                                     self.word_buffer = ""
+                                    self.finished = True
                                     return self._create_chunk(text_to_send)
                                 elif self.buffer:
                                     text_to_send = self.buffer
                                     self.buffer = ""
+                                    self.finished = True
                                     return self._create_chunk(text_to_send)
                                 else:
                                     # No more text, send the final stop chunk
-                                    return ChatCompletionChunk(
-                                        id=self.stream_id,
+                                    final_chunk = ChatCompletionChunk(
+                                        id=f"chatcmpl-{uuid.uuid4()}",  # Use chatcmpl- prefix to match OpenAI format
                                         choices=[Choice(
                                             index=0,
-                                            delta=ChoiceDelta(),
+                                            delta=ChoiceDelta(tool_calls=[]),  # Include empty tool_calls
                                             finish_reason="stop"
                                         )],
-                                        model="agent-api",
+                                        model="gpt-4",  # Use a model name that the TTS system recognizes
                                         object="chat.completion.chunk",
                                         created=int(time.time()),
                                         usage=None
                                     )
+                                    print(f"[Agent] Created final chunk: id='{final_chunk.id}' with finish_reason='stop'")
+                                    return final_chunk
+                            
+                            # Check if we have complete words (space or punctuation)
+                            words = []
+                            i = 0
+                            while i < len(self.buffer):
+                                if self.buffer[i] in " ,.!?;:\n":
+                                    # We found a word boundary
+                                    if self.word_buffer:
+                                        # Add the accumulated word
+                                        words.append(self.word_buffer)
+                                        self.word_buffer = ""
+                                    # Add the space or punctuation as its own word
+                                    words.append(self.buffer[i])
+                                else:
+                                    # Add character to the current word
+                                    self.word_buffer += self.buffer[i]
+                                i += 1
+                            
+                            # Update the buffer to contain only the partial word
+                            self.buffer = self.word_buffer
+                            self.word_buffer = ""
+                            
+                            # If we have words to send, join them and return
+                            if words:
+                                text_to_send = "".join(words)
+                                return self._create_chunk(text_to_send)
+                            
+                            # If we don't have any words to send yet, continue to the next chunk
+                            return await self.__anext__()
+                                    
+                        except StopAsyncIteration:
+                            # If the agent stream is done, send any remaining text
+                            self.finished = True
+                            
+                            # If we haven't received any text from the agent API, use the fallback response
+                            if not self.received_text and USE_FALLBACK_RESPONSE:
+                                print(f"[AgentAPIStream.__anext__] No text received from agent API, using fallback response: {self.fallback_response}")
+                                return self._create_chunk(self.fallback_response)
+                            
+                            if self.word_buffer:
+                                text_to_send = self.word_buffer
+                                self.word_buffer = ""
+                                return self._create_chunk(text_to_send)
+                            elif self.buffer:
+                                text_to_send = self.buffer
+                                self.buffer = ""
+                                return self._create_chunk(text_to_send)
+                            else:
+                                # No more text, send the final stop chunk
+                                final_chunk = ChatCompletionChunk(
+                                    id=f"chatcmpl-{uuid.uuid4()}",  # Use chatcmpl- prefix to match OpenAI format
+                                    choices=[Choice(
+                                        index=0,
+                                        delta=ChoiceDelta(tool_calls=[]),  # Include empty tool_calls
+                                        finish_reason="stop"
+                                    )],
+                                    model="gpt-4",  # Use a model name that the TTS system recognizes
+                                    object="chat.completion.chunk",
+                                    created=int(time.time()),
+                                    usage=None
+                                )
+                                print(f"[Agent] Created final chunk: id='{final_chunk.id}' with finish_reason='stop'")
+                                return final_chunk
                     
                     def _create_chunk(self, text):
                         """Helper method to create a ChatCompletionChunk with the given text"""
@@ -705,11 +735,12 @@ class LLM(llm.LLM):
                         print(f"[TTS Input] Sending text to TTS: {text}")
                         
                         # Create a chunk with the proper format for TTS processing
-                        return ChatCompletionChunk(
-                            id=self.stream_id,
+                        # This format matches what OpenAI returns: id='chatcmpl-XXX' delta=ChoiceDelta(role='assistant', content='text', tool_calls=[])
+                        chunk = ChatCompletionChunk(
+                            id=f"chatcmpl-{uuid.uuid4()}",  # Use chatcmpl- prefix to match OpenAI format
                             choices=[Choice(
                                 index=0,
-                                delta=ChoiceDelta(content=text, role="assistant"),
+                                delta=ChoiceDelta(content=text, role="assistant", tool_calls=[]),
                                 finish_reason=None
                             )],
                             model="gpt-4",  # Use a model name that the TTS system recognizes
@@ -717,6 +748,11 @@ class LLM(llm.LLM):
                             created=int(time.time()),
                             usage=None
                         )
+                        
+                        # Log the chunk in the expected format
+                        print(f"[Agent] Created chunk: id='{chunk.id}' delta=ChoiceDelta(role='assistant', content='{text}', tool_calls=[])")
+                        
+                        return chunk
                     
                     async def __aenter__(self):
                         return self
@@ -854,15 +890,18 @@ class LLMStream(llm.LLMStream):
             
             use_agent_api = os.getenv("USE_AGENT_API", "false").lower() == "true"
             stream = None
-
+            print(f"\n[Agent] Using Agent API integration: {use_agent_api}")    
             if use_agent_api:
                 print("Using Agent API integration")
                 # Get the agent stream from the LLM instance
+                print("Before calling simulate_agent_stream")
                 stream = await self._llm.simulate_agent_stream(
                     messages=chat_ctx
                 )
+                print(f"After calling simulate_agent_stream, got stream of type: {type(stream)}")
                 self._agent_stream = stream
             else:
+                print("Using OpenAI API integration")
                 stream = await self._client.chat.completions.create(
                     messages=chat_ctx,
                     tools=fnc_ctx,
@@ -871,14 +910,16 @@ class LLMStream(llm.LLMStream):
                     stream=True,
                     **self._extra_kwargs,
                 )
+                print(f"After calling chat.completions.create, got stream of type: {type(stream)}")
 
-            self._oai_stream = stream
-           
+            print(f"Setting self._oai_stream to stream of type: {type(stream)}")
+            self._oai_stream = stream  
 
             async with stream:
                 async for chunk in stream:
                     for choice in chunk.choices:
                         chat_chunk = self._parse_choice(chunk.id, choice)
+                        print(f"\n[Agent] Received chunk: {chat_chunk}")
                         if chat_chunk is not None:
                             retryable = False
                             self._event_ch.send_nowait(chat_chunk)
@@ -913,9 +954,34 @@ class LLMStream(llm.LLMStream):
 
     def _parse_choice(self, id: str, choice: Choice) -> llm.ChatChunk | None:
         delta = choice.delta
+        print(f"\n[Agent] _parse_choice called with id: {id}, delta: {delta}")
 
         if delta is None:
+            print("[Agent] Delta is None, returning None")
             return None
+        
+        # Create a new ID with the chatcmpl- prefix to match OpenAI's format
+        # This ensures the TTS layer processes the chunk correctly
+        new_id = id
+        if not id.startswith("chatcmpl-"):
+            import uuid
+            new_id = f"chatcmpl-{uuid.uuid4()}"
+            print(f"[Agent] Changing ID from {id} to {new_id} to match OpenAI format")
+        
+        # Ensure the delta has the correct structure
+        if delta.content is None:
+            print("[Agent] Adding dummy content to response with None content")
+            delta.content = " "  # Single space to trigger TTS
+        
+        # Ensure tool_calls is present (even if empty)
+        if not hasattr(delta, 'tool_calls') or delta.tool_calls is None:
+            print("[Agent] Adding empty tool_calls to delta")
+            delta.tool_calls = []
+        
+        # Ensure role is set to assistant if not already set
+        if delta.role is None:
+            print("[Agent] Setting role to assistant")
+            delta.role = "assistant"
 
         # print("#####################################_parse_choice()#####################################################")
         if delta.tool_calls:
@@ -971,7 +1037,7 @@ class LLMStream(llm.LLMStream):
             return call_chunk
 
         return llm.ChatChunk(
-            id=id,
+            id=new_id,  # Use the new ID with chatcmpl- prefix
             delta=llm.ChoiceDelta(content=delta.content, role="assistant"),
         )
 
@@ -1092,23 +1158,49 @@ class LLMStream(llm.LLMStream):
                         if self.finished:
                             raise StopAsyncIteration
                             
-                        # If we've gone through all texts, send a final chunk with finish_reason
-                        if self.position >= len(self.sample_texts):
+                        # If we got an empty chunk and we're at the end of the stream
+                        if not text:
+                            print(f"[Agent Stream] Received empty text, buffer: '{self.buffer}'")
+                            # If we have any remaining text in the buffer, send it
+                            if self.buffer:
+                                print(f"[Agent Stream] Sending remaining buffer: '{self.buffer}'")
+                                # Create a chunk with the remaining text
+                                chunk = ChatCompletionChunk(
+                                    id=self.stream_id,
+                                    choices=[Choice(
+                                        index=0,
+                                        delta=ChoiceDelta(content=self.buffer, role="assistant"),
+                                        finish_reason=None
+                                    )],
+                                    model="gpt-4",
+                                    object="chat.completion.chunk",
+                                    created=int(time.time()),
+                                    usage=None
+                                )
+                                self.buffer = ""
+                                print(f"[Agent Stream] Returning chunk with remaining buffer")
+                                return chunk
+                            
+
+                            # Mark as finished
                             self.finished = True
-                            # Create a final chunk with finish_reason=stop
-                            return ChatCompletionChunk(
-                                id=self.stream_id,
+                            print("[Agent Stream] Finished, sending final chunk")
+                            
+                            # No more text, send the final stop chunk
+                            final_chunk = ChatCompletionChunk(
+                                id=f"chatcmpl-{uuid.uuid4()}",  # Use chatcmpl- prefix to match OpenAI format
                                 choices=[Choice(
                                     index=0,
-                                    delta=ChoiceDelta(),
+                                    delta=ChoiceDelta(tool_calls=[]),  # Include empty tool_calls
                                     finish_reason="stop"
                                 )],
-                                model="custom-brain",
+                                model="gpt-4",  # Use a model name that the TTS system recognizes
                                 object="chat.completion.chunk",
                                 created=int(time.time()),
-                                usage=None  # No usage information for our custom brain
+                                usage=None
                             )
-                        
+                            print(f"[Agent] Created final chunk: id='{final_chunk.id}' with finish_reason='stop'")
+                            return final_chunk                      
                         # Get the current text and create a chunk
                         text = self.sample_texts[self.position]
                         print(f"[TTS Input] Sending text: {text}")

@@ -49,24 +49,51 @@ class AgentAPIClient:
             "conversation_id": "a80660b5-a6fc-44fb-9dc9-a4b8c3febbd0"
         })
         
+        print(f"[Agent API] Making POST request to {self.base_url}")
+        print(f"[Agent API] Payload: {payload}")
+        
         async with aiohttp.ClientSession() as session:
             async with session.post(self.base_url, headers=self.headers, data=payload) as response:
+                print(f"[Agent API] Got response with status: {response.status}")
                 if response.status != 200:
                     error_text = await response.text()
+                    #print(f"[Agent API] Error response: {error_text}")
                     raise Exception(f"Agent API returned status {response.status}: {error_text}")
+                
+                print("[Agent API] Starting to process streaming response")
+                # Flag to track if we've yielded any chunks with text
+                has_yielded_text = False
                 
                 # The response is a text/event-stream with chunks in JSON format
                 async for line in response.content:
                     line = line.decode('utf-8').strip()
                     if line:
-                        print(f"\n[Agent] Received line: {line}")
+                        print(f"\n[Agent API] Received line: {line}")
                         try:
                             # Parse the JSON chunk
-                            chunk = json.loads(line)
+                            json_part = line.split("data: ", 1)[1]
+                            chunk = json.loads(json_part)
+                            print(f"[Agent API] Yielding chunk: {chunk}")
+                            
+                            # Check if this chunk has text content
+                            if "text" in chunk and chunk["text"]:
+                                has_yielded_text = True
+                            
                             yield chunk
                         except json.JSONDecodeError:
+                            print(f"[Agent API] JSON decode error for line: {line}")
                             # Skip lines that aren't valid JSON
                             continue
+                
+                # If we haven't yielded any chunks with text, yield a default response
+                if not has_yielded_text:
+                    print("[Agent API] No text content received from API, yielding default response")
+                    default_response = {
+                        "text": "I'm sorry, I couldn't process your request properly. Please try again."
+                    }
+                    yield default_response
+                
+                print("[Agent API] Finished processing streaming response")
 
     async def call_agent_sync(self, 
                              query: str, 
