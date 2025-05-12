@@ -5,11 +5,14 @@ import aiohttp
 import time
 import uuid
 from typing import Optional, Dict, Any, AsyncIterator
+import os
+from dotenv import load_dotenv
+load_dotenv()
 
 class AgentAPIClient:
     """Client for interacting with the third-party agent API."""
 
-    bearer_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJhYWVlMjBkOC0wNDA1LTRlNTYtOTQ3YS05MTIyZmFhZjMyMWIiLCJzdWIiOiJXZWIgQVBJIFBhc3Nwb3J0IiwiYXBwX2lkIjoiYWFlZTIwZDgtMDQwNS00ZTU2LTk0N2EtOTEyMmZhYWYzMjFiIiwiYXBwX2NvZGUiOiJIN0pLdHRYVXZyWDViQnhEIiwiZW5kX3VzZXJfaWQiOiIzNmJhNjM0MS0zMmI1LTQxMjctODExMC05OWFlNmJjYjJjNWYifQ.lIQVZ0LPwAREIfXYARWWB6vVLeHy9SXJf0qzzNbi3Eo"
+    bearer_token = os.getenv("AGENT_API_BEARER_TOKEN")
     
     def __init__(self, base_url: str = "https://app.eng.quant.ai/api/chat-messages"):
         self.base_url = base_url
@@ -36,15 +39,11 @@ class AgentAPIClient:
             An async iterator yielding response chunks from the agent
         """
             
-        if not conversation_id:
-            conversation_id = "50998c68-7169-4c6a-842a-5b1695bf8307" 
-
-
         print(f"****** [Agent] Calling agent with query: {query}, conversation_id: {conversation_id}")    
         
         payload = json.dumps({
             "query": query,
-            "conversation_id": "50998c68-7169-4c6a-842a-5b1695bf8307",
+            "conversation_id": os.getenv("CONVERSATION_ID"),
             "response_mode": "streaming",
             "channel": "web",
             "inputs": {}
