@@ -48,7 +48,7 @@ class AgentAPIClient:
             
         payload = json.dumps({
             "query": query,
-            "conversation_id": "fda840e1-0874-41d8-82f5-eca0bed38cf4",
+            "conversation_id": "3766fcb0-884a-4ab9-8717-ca39d0230c8d",
             "response_mode": "streaming",
             "channel": "web",
             "inputs": {}
