@@ -29,10 +29,7 @@ class AgentAPIClient:
         }
     
     async def call_agent(self, 
-                         query: str, 
-                         call_id: Optional[str] = None, 
-                         from_number: Optional[str] = None, 
-                         conversation_id: Optional[str] = None) -> AsyncIterator[Dict[str, Any]]:
+                         query: str) -> AsyncIterator[Dict[str, Any]]:
         """
         Call the agent API and return a streaming response.
         
@@ -48,7 +45,7 @@ class AgentAPIClient:
             
         payload = json.dumps({
             "query": query,
-            "conversation_id": "3766fcb0-884a-4ab9-8717-ca39d0230c8d",
+            "conversation_id": os.getenv("CONVERSATION_ID"),
             "response_mode": "streaming",
             "channel": "web",
             "inputs": {}

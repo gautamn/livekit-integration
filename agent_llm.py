@@ -583,7 +583,7 @@ class LLM(llm.LLM):
                 class AgentAPIStream:
                     def __init__(self, query, conversation_id=None):
                         self.query = query
-                        self.conversation_id = conversation_id or str(uuid.uuid4())
+                        self.conversation_id = None
                         self.agent_client = AgentAPIClient()
                         self.agent_stream = None
                         self.finished = False
@@ -603,8 +603,7 @@ class LLM(llm.LLM):
                         if self.agent_stream is None:
                             print("[AgentAPIStream.__anext__] Initializing agent_stream")
                             self.agent_stream = self.agent_client.call_agent(
-                                query=self.query,
-                                conversation_id=self.conversation_id
+                                query=self.query
                             )
                             print("[AgentAPIStream.__anext__] agent_stream initialized")
                         
