@@ -16,6 +16,7 @@ load_dotenv()
 # Set up logger
 logger = get_logger("agent_api")
 
+
 class AgentAPIClient:
     """Client for interacting with the third-party agent API."""
 
@@ -49,6 +50,11 @@ class AgentAPIClient:
         payload = json.dumps({
             "query": query,
             "conversation_id": "3766fcb0-884a-4ab9-8717-ca39d0230c8d",
+        print(f"****** [Agent] Calling agent with query: {query}, conversation_id: {conversation_id}")    
+        
+        payload = json.dumps({
+            "query": query,
+            "conversation_id": os.getenv("CONVERSATION_ID"),
             "response_mode": "streaming",
             "channel": "web",
             "inputs": {}
