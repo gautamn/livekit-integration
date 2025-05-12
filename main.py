@@ -13,8 +13,13 @@ from livekit.plugins import (
 from livekit.plugins.turn_detector.multilingual import MultilingualModel
 
 from agent_llm import LLM
+from utils.logging_utils import get_logger
 
+# Load environment variables
 load_dotenv()
+
+# Set up logger
+logger = get_logger("main")
 
 
 class Assistant(Agent):
@@ -23,31 +28,44 @@ class Assistant(Agent):
 
 
 async def entrypoint(ctx: agents.JobContext):
-    await ctx.connect()
+    logger.info("Starting agent entrypoint")
+    try:
+        logger.info("Connecting to room")
+        await ctx.connect()
+        logger.info("Successfully connected to room")
 
-    session = AgentSession(
-        stt=deepgram.STT(model="nova-3", language="multi"),
-        llm=LLM(model="gpt-4o-mini"),
-        tts=cartesia.TTS(),
-        vad=silero.VAD.load(),
-        turn_detection=MultilingualModel(),
-    )
+        logger.info("Initializing agent session with components")
+        session = AgentSession(
+            stt=deepgram.STT(model="nova-3", language="multi"),
+            llm=LLM(model="gpt-4o-mini"),
+            tts=cartesia.TTS(),
+            vad=silero.VAD.load(),
+            turn_detection=MultilingualModel(),
+        )
+        logger.info("Agent session initialized successfully")
 
 
-    await session.start(
-        room=ctx.room,
-        agent=Assistant(),
-        room_input_options=RoomInputOptions(
-            # LiveKit Cloud enhanced noise cancellation
-            # - If self-hosting, omit this parameter
-            # - For telephony applications, use `BVCTelephony` for best results
-            noise_cancellation=noise_cancellation.BVC(), 
-        ),
-    )
+        logger.info("Starting agent session")
+        await session.start(
+            room=ctx.room,
+            agent=Assistant(),
+            room_input_options=RoomInputOptions(
+                # LiveKit Cloud enhanced noise cancellation
+                # - If self-hosting, omit this parameter
+                # - For telephony applications, use `BVCTelephony` for best results
+                noise_cancellation=noise_cancellation.BVC(), 
+            ),
+        )
+        logger.info("Agent session started successfully")
 
-    await session.generate_reply(
-        instructions="Greet the user and offer your assistance."
-    )
+        logger.info("Generating initial greeting")
+        await session.generate_reply(
+            instructions="Greet the user and offer your assistance."
+        )
+        logger.info("Initial greeting generated")
+    except Exception as e:
+        logger.error(f"Error in entrypoint: {str(e)}")
+        raise
 
 
 if __name__ == "__main__":

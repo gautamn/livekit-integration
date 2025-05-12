@@ -1,0 +1,22 @@
+# Core dependencies
+python-dotenv>=1.0.0
+livekit>=1.0.0
+openai>=1.0.0
+httpx>=0.24.0
+
+# API clients
+aiohttp>=3.8.5
+requests>=2.31.0
+
+# Audio processing
+silero>=0.4.1
+deepgram-sdk>=2.11.0
+
+# Utils
+uuid>=1.30
+asyncio>=3.4.3
+typing-extensions>=4.7.1
+
+# Testing
+pytest>=7.4.0
+pytest-asyncio>=0.21.1

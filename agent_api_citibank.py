@@ -4,7 +4,15 @@ import asyncio
 import aiohttp
 import time
 import uuid
+import os
+from dotenv import load_dotenv
 from typing import Optional, Dict, Any, AsyncIterator
+from utils.logging_utils import get_logger
+
+load_dotenv()
+
+# Set up logger
+logger = get_logger("agent_api_citibank")
 
 class AgentAPIClientCitibank:
     """Client for interacting with the third-party agent API."""
@@ -40,7 +48,7 @@ class AgentAPIClientCitibank:
             conversation_id = "4c738740-070b-496e-8acd-31ab5627305b" 
 
 
-        print(f"****** [Agent] Calling agent with query: {query}, call_id: {call_id}, conversation_id: {conversation_id}")    
+        logger.info(f"Calling agent with query: {query}, call_id: {call_id}, conversation_id: {conversation_id}")    
         
         payload = json.dumps({
             "call_id": call_id,
@@ -49,18 +57,19 @@ class AgentAPIClientCitibank:
             "conversation_id": "a80660b5-a6fc-44fb-9dc9-a4b8c3febbd0"
         })
         
-        print(f"[Agent API] Making POST request to {self.base_url}")
-        print(f"[Agent API] Payload: {payload}")
+        logger.info(f"Making POST request to {self.base_url}")
+        logger.debug(f"Headers: {self.headers}")
+        logger.debug(f"Payload: {payload}")
         
         async with aiohttp.ClientSession() as session:
             async with session.post(self.base_url, headers=self.headers, data=payload) as response:
-                print(f"[Agent API] Got response with status: {response.status}")
+                logger.info(f"Got response with status: {response.status}")
                 if response.status != 200:
                     error_text = await response.text()
-                    #print(f"[Agent API] Error response: {error_text}")
+                    logger.error(f"Agent API returned status {response.status}: {error_text}")
                     raise Exception(f"Agent API returned status {response.status}: {error_text}")
                 
-                print("[Agent API] Starting to process streaming response")
+                logger.info("Starting to process streaming response")
                 # Flag to track if we've yielded any chunks with text
                 has_yielded_text = False
                 
@@ -68,12 +77,12 @@ class AgentAPIClientCitibank:
                 async for line in response.content:
                     line = line.decode('utf-8').strip()
                     if line:
-                        print(f"\n[Agent API] Received line: {line}")
+                        logger.debug(f"Received line: {line[:100]}..." if len(line) > 100 else f"Received line: {line}")
                         try:
                             # Parse the JSON chunk
                             json_part = line.split("data: ", 1)[1]
                             chunk = json.loads(json_part)
-                            print(f"[Agent API] Yielding chunk: {chunk}")
+                            logger.debug(f"Yielding chunk: {chunk}")
                             
                             # Check if this chunk has text content
                             if "text" in chunk and chunk["text"]:
@@ -81,19 +90,19 @@ class AgentAPIClientCitibank:
                             
                             yield chunk
                         except json.JSONDecodeError:
-                            print(f"[Agent API] JSON decode error for line: {line}")
+                            logger.warning(f"JSON decode error for line: {line}")
                             # Skip lines that aren't valid JSON
                             continue
                 
                 # If we haven't yielded any chunks with text, yield a default response
                 if not has_yielded_text:
-                    print("[Agent API] No text content received from API, yielding default response")
+                    logger.warning("No text content received from API, yielding default response")
                     default_response = {
                         "text": "I'm sorry, I couldn't process your request properly. Please try again."
                     }
                     yield default_response
                 
-                print("[Agent API] Finished processing streaming response")
+                logger.info("Finished processing streaming response")
 
     async def call_agent_sync(self, 
                              query: str, 
@@ -123,9 +132,9 @@ class AgentAPIClientCitibank:
 
 # Example usage
 async def example():
-    agent = AgentAPIClient()
+    agent = AgentAPIClientCitibank()
     async for chunk in agent.call_agent("Hello, how are you?"):
-        print(chunk)
+        logger.info(f"Received chunk: {chunk}")
 
 if __name__ == "__main__":
     asyncio.run(example())

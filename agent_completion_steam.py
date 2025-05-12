@@ -1,6 +1,11 @@
 import aiohttp
 import asyncio
+import json
 from typing import AsyncIterator, Dict, Any, Optional
+from utils.logging_utils import get_logger
+
+# Set up logger
+logger = get_logger("agent_completion_stream")
 
 
 class AgentCompletionChunk:
@@ -81,7 +86,10 @@ class AgentStreamWrapper(AsyncIterator[AgentCompletionChunk]):
                 try:
                     # For aiohttp, this will typically return a chunk of bytes
                     line = await self._response_iter.__anext__()
-                    print(f"Received streaming chunk: {line[:100]}...") if len(line) > 100 else print(f"Received streaming chunk: {line}")
+                    if len(line) > 100:
+                        logger.debug(f"Received streaming chunk: {line[:100]}...")
+                    else:
+                        logger.debug(f"Received streaming chunk: {line}")
                 except StopAsyncIteration:
                     line = None
 
@@ -113,7 +121,7 @@ class AgentStreamWrapper(AsyncIterator[AgentCompletionChunk]):
                             line = json.dumps(data).encode('utf-8')
                             self._lines.append(line)
                         except Exception as e:
-                            print(f"Error parsing JSON: {e}")
+                            logger.error(f"Error parsing JSON: {e}")
                             # If JSON parsing fails, try to use the raw text
                             if hasattr(self.response, 'text'):
                                 text = self.response.text
