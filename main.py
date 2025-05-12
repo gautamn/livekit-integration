@@ -11,6 +11,8 @@ from livekit.plugins import (
     silero,
 )
 from livekit.plugins.turn_detector.multilingual import MultilingualModel
+from conversation_manager import ConversationManager
+
 
 from agent_llm import LLM
 from utils.logging_utils import get_logger
@@ -44,6 +46,12 @@ async def entrypoint(ctx: agents.JobContext):
         )
         logger.info("Agent session initialized successfully")
 
+        logger.info("Initializing conversation manager")
+        await ConversationManager.initialize()
+        logger.info("Conversation manager initialized successfully")
+
+        cid = ConversationManager.get_conversation_id()
+        print("#@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@Using conversation_id:", cid)
 
         logger.info("Starting agent session")
         await session.start(

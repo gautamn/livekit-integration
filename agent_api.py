@@ -9,6 +9,7 @@ from typing import Optional, Dict, Any, AsyncIterator
 import os
 from dotenv import load_dotenv
 from utils.logging_utils import get_logger
+from conversation_manager import ConversationManager
 
 # Load environment variables
 load_dotenv()
@@ -42,10 +43,13 @@ class AgentAPIClient:
         Returns:
             An async iterator yielding response chunks from the agent
         """
-            
+
+        cid = ConversationManager.get_conversation_id()
+        print("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$Using conversation_id:", cid)
+    
         payload = json.dumps({
             "query": query,
-            "conversation_id": os.getenv("CONVERSATION_ID"),
+            "conversation_id": cid,
             "response_mode": "streaming",
             "channel": "web",
             "inputs": {}
